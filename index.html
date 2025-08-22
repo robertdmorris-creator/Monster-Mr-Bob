@@ -114,7 +114,7 @@
         
         // --- Sound Setup ---
         let soundInitialized = false;
-        let losingHorn; 
+        let failSynth; // <-- UPDATED: Renamed for clarity
 
         const roarSynth = new Tone.AMSynth({
             harmonicity: 1.2,
@@ -126,29 +126,26 @@
         }).toDestination();
         roarSynth.volume.value = -3;
         
-        // --- UPDATED: Sound initialization with pre-loading ---
+        // --- UPDATED: Sound initialization with synthesized fail sound ---
         const startOverlay = document.getElementById('start-overlay');
         const startButton = document.getElementById('start-button');
 
         startButton.addEventListener('click', async () => {
-            // Prevent multiple clicks
             startButton.disabled = true;
             startButton.textContent = "LOADING...";
 
-            // Initialize audio context
             await Tone.start(); 
             
-            // Create the player and wait for it to load the sound file
-            losingHorn = new Tone.Player({
-                url: "https://cdn.jsdelivr.net/gh/dev-v2/cdn/sfx/fail.mp3",
-                onload: () => {
-                    // This function runs ONLY when the sound is ready
-                    soundInitialized = true; 
-                    startOverlay.style.display = 'none'; // Hide the overlay
-                    animate(); // Start the game loop
-                }
+            // Create the synth for the fail sound
+            failSynth = new Tone.Synth({
+                oscillator: { type: 'square' },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 }
             }).toDestination();
-            losingHorn.volume.value = -5;
+            failSynth.volume.value = -10;
+
+            soundInitialized = true; 
+            startOverlay.style.display = 'none'; 
+            animate();
         });
 
         // --- Skybox ---
@@ -446,8 +443,11 @@
                 const student = students.children[i];
                 const studentBox = new THREE.Box3().setFromObject(student);
                 if (playerCollider.intersectsBox(studentBox)) {
-                    if (soundInitialized && losingHorn && losingHorn.loaded && losingHorn.state !== "started") {
-                        losingHorn.start();
+                    if (soundInitialized && failSynth) {
+                        // Play a two-note descending sound for the fail effect
+                        const now = Tone.now();
+                        failSynth.triggerAttackRelease("A#2", "8n", now);
+                        failSynth.triggerAttackRelease("A2", "8n", now + 0.15);
                     }
                     students.remove(student);
                     studentCountElement.textContent = students.children.length;
