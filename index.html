@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mr. Bob's Monster Tag</title>
+    <title>Mr. Bob's Angel Tag</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@
             background-color: rgba(0, 0, 0, 0.5);
             padding: 10px 20px;
             border-radius: 10px;
-            border: 2px solid #FF5733;
+            border: 2px solid #FFD700; /* Gold border */
             font-size: 16px;
         }
         #game-over-message {
@@ -34,7 +34,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: #FF5733;
+            color: #FFD700; /* Gold text */
             text-align: center;
             display: none;
             z-index: 10;
@@ -42,7 +42,8 @@
             text-shadow: 4px 4px 0px #000;
         }
         .label {
-            color: white;
+            color: black; /* UPDATED */
+            text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; /* UPDATED */
             background-color: transparent;
             font-family: 'Press Start 2P', cursive;
         }
@@ -61,12 +62,12 @@
         #start-button {
             padding: 20px 40px;
             font-size: 24px;
-            background-color: #FF5733;
-            color: white;
+            background-color: #FFD700; /* Gold button */
+            color: #444;
             border: 4px solid white;
             border-radius: 15px;
             cursor: pointer;
-            box-shadow: 0 0 20px #FF5733;
+            box-shadow: 0 0 20px #FFD700;
         }
         #start-button:disabled {
             background-color: #555;
@@ -114,11 +115,10 @@
         
         // --- Sound Setup ---
         let soundInitialized = false;
-        let failSynth; // <-- UPDATED: Renamed for clarity
+        let failSynth, musicLoop;
 
         const roarSynth = new Tone.AMSynth({
-            harmonicity: 1.2,
-            detune: 0,
+            harmonicity: 1.2, detune: 0,
             oscillator: { type: "fatsawtooth", count: 3, spread: 20 },
             envelope: { attack: 0.2, decay: 0.3, sustain: 0.4, release: 1.5 },
             modulation: { type: "square" },
@@ -126,7 +126,6 @@
         }).toDestination();
         roarSynth.volume.value = -3;
         
-        // --- UPDATED: Sound initialization with synthesized fail sound ---
         const startOverlay = document.getElementById('start-overlay');
         const startButton = document.getElementById('start-button');
 
@@ -136,12 +135,33 @@
 
             await Tone.start(); 
             
-            // Create the synth for the fail sound
             failSynth = new Tone.Synth({
                 oscillator: { type: 'square' },
                 envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 }
             }).toDestination();
             failSynth.volume.value = -10;
+
+            // --- Background Music ---
+            const musicSynth = new Tone.Synth({
+                oscillator: { type: 'pulse', width: 0.2 },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.4 }
+            }).toDestination();
+            musicSynth.volume.value = -18;
+
+            const musicPattern = [
+                'C4', 'G3', 'E3', 'A3', 'B3', 'A3', 'G3', 'E4',
+                'D4', 'C4', 'G3', 'E3', 'A3', 'B3', 'C4', 'B3',
+                'A3', 'G3', 'E3', 'A3', 'B3', 'A3', 'G3', 'E4',
+                'D4', 'C4', 'G3', 'E3', 'A3', 'B3', 'C4', 'B3', 'A3'
+            ];
+            
+            musicLoop = new Tone.Sequence((time, note) => {
+                musicSynth.triggerAttackRelease(note, '8n', time);
+            }, musicPattern, '8n').start(0);
+
+            Tone.Transport.bpm.value = 140;
+            Tone.Transport.start();
+            // --- End Background Music ---
 
             soundInitialized = true; 
             startOverlay.style.display = 'none'; 
@@ -200,28 +220,44 @@
         }
         scene.add(cityLayout);
 
-        // --- Mr. Bob (Player) ---
+        // --- Mr. Bob the Angel (Player) ---
         const mrBob = new THREE.Group();
-        const monsterBodyMaterial = new THREE.MeshPhongMaterial({ color: 0x8B0000 });
-        const body = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), monsterBodyMaterial);
+        const angelBodyMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+        const body = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), angelBodyMaterial);
         body.position.y = 1;
         mrBob.add(body);
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshPhongMaterial({ color: 0xFFFF00 }));
-        eye.position.set(-0.4, 1.2, 0.8);
-        mrBob.add(eye);
-        mrBob.add(eye.clone().translateX(0.8));
-        const horn = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1, 16), monsterBodyMaterial);
-        horn.position.set(-0.5, 1.8, 0);
-        horn.rotation.z = -0.3;
-        mrBob.add(horn);
-        mrBob.add(horn.clone().translateX(1).rotateZ(0.6));
+
+        // Halo
+        const haloGeo = new THREE.TorusGeometry(0.7, 0.1, 16, 100);
+        const haloMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF00 });
+        const halo = new THREE.Mesh(haloGeo, haloMaterial);
+        halo.position.y = 2.2;
+        halo.rotation.x = Math.PI / 2;
+        mrBob.add(halo);
+
+        // Wings
+        const wingShape = new THREE.Shape();
+        wingShape.moveTo(0, 0);
+        wingShape.bezierCurveTo(1, 1, 1.5, 2, 0, 2.5);
+        wingShape.bezierCurveTo(-1.5, 2, -1, 1, 0, 0);
+        const wingGeo = new THREE.ShapeGeometry(wingShape);
+        const wingMaterial = new THREE.MeshBasicMaterial({ color: 0xF0F0F0, side: THREE.DoubleSide });
+        const leftWing = new THREE.Mesh(wingGeo, wingMaterial);
+        leftWing.position.set(-0.8, 1, 0);
+        leftWing.rotation.y = Math.PI / 3;
+        mrBob.add(leftWing);
+        const rightWing = new THREE.Mesh(wingGeo, wingMaterial);
+        rightWing.position.set(0.8, 1, 0);
+        rightWing.rotation.y = -Math.PI / 3;
+        mrBob.add(rightWing);
+
         scene.add(mrBob);
 
         const bobDiv = document.createElement('div');
         bobDiv.className = 'label';
         bobDiv.textContent = 'Mr. Bob';
         const bobLabel = new CSS2DObject(bobDiv);
-        bobLabel.position.set(0, 2.5, 0);
+        bobLabel.position.set(0, 3, 0); // Raised label for halo
         mrBob.add(bobLabel);
 
         // --- Buildings ---
@@ -444,7 +480,6 @@
                 const studentBox = new THREE.Box3().setFromObject(student);
                 if (playerCollider.intersectsBox(studentBox)) {
                     if (soundInitialized && failSynth) {
-                        // Play a two-note descending sound for the fail effect
                         const now = Tone.now();
                         failSynth.triggerAttackRelease("A#2", "8n", now);
                         failSynth.triggerAttackRelease("A2", "8n", now + 0.15);
@@ -481,7 +516,10 @@
         function endGame() {
             gameOver = true;
             document.getElementById('game-over-message').style.display = 'block';
-            if (soundInitialized) roarSynth.triggerAttackRelease("G1", "2s");
+            if (soundInitialized) {
+                roarSynth.triggerAttackRelease("G1", "2s");
+                if (musicLoop) musicLoop.stop();
+            }
         }
 
         function animate() {
