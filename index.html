@@ -46,7 +46,6 @@
             background-color: transparent;
             font-family: 'Press Start 2P', cursive;
         }
-        /* --- NEW: Start Button Overlay --- */
         #start-overlay {
             position: absolute;
             top: 0;
@@ -69,6 +68,11 @@
             cursor: pointer;
             box-shadow: 0 0 20px #FF5733;
         }
+        #start-button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -78,7 +82,6 @@
     </div>
     <div id="game-over-message">Mr Bob: 1 Students 0</div>
 
-    <!-- NEW: Start Button Overlay HTML -->
     <div id="start-overlay">
         <button id="start-button">START GAME</button>
     </div>
@@ -123,19 +126,29 @@
         }).toDestination();
         roarSynth.volume.value = -3;
         
-        // --- UPDATED: Sound initialization is now on the start button ---
+        // --- UPDATED: Sound initialization with pre-loading ---
         const startOverlay = document.getElementById('start-overlay');
         const startButton = document.getElementById('start-button');
 
-        startButton.addEventListener('click', () => {
-            if (!soundInitialized) { 
-                Tone.start(); 
-                soundInitialized = true; 
-                losingHorn = new Tone.Player("https://cdn.jsdelivr.net/gh/dev-v2/cdn/sfx/fail.mp3").toDestination();
-                losingHorn.volume.value = -5;
-            }
-            startOverlay.style.display = 'none'; // Hide the overlay
-            animate(); // Start the game loop
+        startButton.addEventListener('click', async () => {
+            // Prevent multiple clicks
+            startButton.disabled = true;
+            startButton.textContent = "LOADING...";
+
+            // Initialize audio context
+            await Tone.start(); 
+            
+            // Create the player and wait for it to load the sound file
+            losingHorn = new Tone.Player({
+                url: "https://cdn.jsdelivr.net/gh/dev-v2/cdn/sfx/fail.mp3",
+                onload: () => {
+                    // This function runs ONLY when the sound is ready
+                    soundInitialized = true; 
+                    startOverlay.style.display = 'none'; // Hide the overlay
+                    animate(); // Start the game loop
+                }
+            }).toDestination();
+            losingHorn.volume.value = -5;
         });
 
         // --- Skybox ---
@@ -472,7 +485,7 @@
         }
 
         function animate() {
-            if (!soundInitialized) return; // Don't run game logic until started
+            if (!soundInitialized) return; 
             requestAnimationFrame(animate);
             moveMrBob();
             moveStudents();
@@ -496,4 +509,3 @@
     </script>
 </body>
 </html>
-
