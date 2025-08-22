@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic's Math Adventure</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 2px solid #FFD700;
+            font-size: 16px;
+        }
+        #fullscreen-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 2px solid white;
+            border-radius: 10px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        #fullscreen-btn svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+        }
+        #modal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 139, 0.8);
+            padding: 40px;
+            border-radius: 20px;
+            border: 4px solid #FFD700;
+            color: white;
+            text-align: center;
+            display: none;
+            z-index: 10;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.7);
+        }
+        #modal-question {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        #modal-input {
+            width: 100px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 2px solid #FFD700;
+            text-align: center;
+            font-size: 20px;
+            color: black;
+        }
+        #modal-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            background-color: #FFD700;
+            color: #00008B;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #modal-button:hover {
+            background-color: #FFA500;
+        }
+        #message-box {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+            z-index: 20;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="ui-container">
+        Rings: <span id="ring-count">0</span>
+    </div>
+     <button id="fullscreen-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+        </svg>
+    </button>
+    <div id="modal">
+        <div id="modal-question"></div>
+        <input type="number" id="modal-input" />
+        <button id="modal-button">Submit</button>
+    </div>
+    <div id="message-box"></div>
+
+    <script>
+        // --- Basic Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('game-container').appendChild(renderer.domElement);
+        
+        // --- Sound Setup ---
+        let soundInitialized = false;
+        const synth = new Tone.Synth().toDestination();
+        const wind = new Tone.Noise("white").toDestination();
+        wind.volume.value = -45;
+        const hornSynth = new Tone.Synth().toDestination();
+        hornSynth.volume.value = -20;
+        const powerupSynth = new Tone.Synth().toDestination();
+        const powerdownSynth = new Tone.Synth().toDestination();
+        
+        document.body.addEventListener('click', () => {
+            if (!soundInitialized) {
+                Tone.start();
+                wind.start();
+                soundInitialized = true;
+            }
+        });
+
+        // --- Skybox ---
+        const loader = new THREE.CubeTextureLoader();
+        const texture = loader.load([
+            'https://threejsfundamentals.org/threejs/resources/images/cubemaps/skybox/right.png',
+            'https://threejsfundamentals.org/threejs/resources/images/cubemaps/skybox/left.png',
+            'https://threejsfundamentals.org/threejs/resources/images/cubemaps/skybox/top.png',
+            'https://threejsfundamentals.org/threejs/resources/images/cubemaps/skybox/bottom.png',
+            'https://threejsfundamentals.org/threejs/resources/images/cubemaps/skybox/front.png',
+            'https://threejsfundamentals.org/threejs/resources/images/cubemaps/skybox/back.png',
+        ]);
+        scene.background = texture;
+        
+        // --- Initial Camera Position ---
+        camera.position.set(0, 10, 20);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 5);
+        scene.add(directionalLight);
+
+        // --- Ground ---
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // --- Roads and Sidewalks ---
+        const cityLayout = new THREE.Group();
+        const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x404040 });
+        const sidewalkMaterial = new THREE.MeshLambertMaterial({ color: 0xAAAAAA });
+        const roadWidth = 10;
+        const sidewalkWidth = roadWidth + 4;
+        const worldSize = 200;
+        const roadGridStep = 40;
+        const roadPositions = [];
+
+        for (let i = -worldSize / 2 + roadGridStep / 2; i < worldSize / 2; i += roadGridStep) {
+            roadPositions.push({ x: i, z: 0, dir: 'z' });
+            const sidewalkGeo = new THREE.PlaneGeometry(sidewalkWidth, worldSize);
+            const sidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMaterial);
+            sidewalk.rotation.x = -Math.PI / 2;
+            sidewalk.position.set(i, 0.01, 0);
+            cityLayout.add(sidewalk);
+            const roadGeo = new THREE.PlaneGeometry(roadWidth, worldSize);
+            const road = new THREE.Mesh(roadGeo, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(i, 0.02, 0);
+            cityLayout.add(road);
+        }
+
+        for (let i = -worldSize / 2 + roadGridStep / 2; i < worldSize / 2; i += roadGridStep) {
+            roadPositions.push({ x: 0, z: i, dir: 'x' });
+            const sidewalkGeo = new THREE.PlaneGeometry(worldSize, sidewalkWidth);
+            const sidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMaterial);
+            sidewalk.rotation.x = -Math.PI / 2;
+            sidewalk.position.set(0, 0.01, i);
+            cityLayout.add(sidewalk);
+            const roadGeo = new THREE.PlaneGeometry(worldSize, roadWidth);
+            const road = new THREE.Mesh(roadGeo, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(0, 0.02, 0);
+            cityLayout.add(road);
+        }
+        scene.add(cityLayout);
+
+        // --- Sonic (Player) ---
+        const sonic = new THREE.Group();
+        const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x0055FF });
+        const faceMaterial = new THREE.MeshPhongMaterial({ color: 0xFFDAB9 });
+        const eyeMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+        const whiteMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+        const redMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000 });
+
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), bodyMaterial);
+        body.position.y = 0.5;
+        sonic.add(body);
+        const face = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 32), faceMaterial);
+        face.position.set(0, 0.4, 0.4);
+        sonic.add(face);
+        const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), eyeMaterial);
+        eye1.position.set(-0.1, 0.6, 0.65);
+        sonic.add(eye1);
+        const eye2 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), eyeMaterial);
+        eye2.position.set(0.1, 0.6, 0.65);
+        sonic.add(eye2);
+        const spikeGeometry = new THREE.ConeGeometry(0.3, 0.8, 32);
+        const spike1 = new THREE.Mesh(spikeGeometry, bodyMaterial);
+        spike1.position.set(0, 0.7, -0.5);
+        spike1.rotation.x = Math.PI / 1.5;
+        sonic.add(spike1);
+        const spike2 = new THREE.Mesh(spikeGeometry, bodyMaterial);
+        spike2.position.set(-0.3, 0.4, -0.6);
+        spike2.rotation.z = -Math.PI / 6;
+        spike2.rotation.x = Math.PI / 1.5;
+        sonic.add(spike2);
+        const spike3 = new THREE.Mesh(spikeGeometry, bodyMaterial);
+        spike3.position.set(0.3, 0.4, -0.6);
+        spike3.rotation.z = Math.PI / 6;
+        spike3.rotation.x = Math.PI / 1.5;
+        sonic.add(spike3);
+        const shoeGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+        shoeGeometry.scale(1.5, 1, 1);
+        const leftShoe = new THREE.Mesh(shoeGeometry, redMaterial);
+        leftShoe.position.set(-0.25, 0.1, 0.2);
+        sonic.add(leftShoe);
+        const rightShoe = new THREE.Mesh(shoeGeometry, redMaterial);
+        rightShoe.position.set(0.25, 0.1, 0.2);
+        sonic.add(rightShoe);
+        const strapGeometry = new THREE.CylinderGeometry(0.12, 0.12, 0.25, 32);
+        const leftStrap = new THREE.Mesh(strapGeometry, whiteMaterial);
+        leftStrap.position.set(-0.25, 0.1, 0.2);
+        leftStrap.rotation.x = Math.PI / 2;
+        sonic.add(leftStrap);
+        const rightStrap = new THREE.Mesh(strapGeometry, whiteMaterial);
+        rightStrap.position.set(0.25, 0.1, 0.2);
+        rightStrap.rotation.x = Math.PI / 2;
+        sonic.add(rightStrap);
+        const handGeometry = new THREE.SphereGeometry(0.15, 32, 32);
+        const leftHand = new THREE.Mesh(handGeometry, whiteMaterial);
+        leftHand.position.set(-0.5, 0.4, 0.2);
+        sonic.add(leftHand);
+        const rightHand = new THREE.Mesh(handGeometry, whiteMaterial);
+        rightHand.position.set(0.5, 0.4, 0.2);
+        sonic.add(rightHand);
+        scene.add(sonic);
+
+        // --- City Buildings ---
+        const buildings = new THREE.Group();
+        const buildingGeometry = new THREE.BoxGeometry(1, 1, 1);
+        function createBuildingTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 128;
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#c2c2c2';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = '#6699ff';
+            const windowWidth = 10, windowHeight = 10, xSpacing = 8, ySpacing = 12;
+            for (let y = ySpacing/2; y < canvas.height - windowHeight; y += windowHeight + ySpacing) {
+                for (let x = xSpacing/2; x < canvas.width - windowWidth; x += windowWidth + xSpacing) {
+                    context.fillRect(x, y, windowWidth, windowHeight);
+                }
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+        const buildingTexture = createBuildingTexture();
+        for (let i = 0; i < 150; i++) {
+            const buildingMaterial = new THREE.MeshLambertMaterial({ map: buildingTexture.clone() });
+            const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+            const blockX = Math.floor(Math.random() * (worldSize / roadGridStep)) - (worldSize / roadGridStep / 2);
+            const blockZ = Math.floor(Math.random() * (worldSize / roadGridStep)) - (worldSize / roadGridStep / 2);
+            const randomOffsetX = (Math.random() - 0.5) * (roadGridStep - sidewalkWidth - 5);
+            const randomOffsetZ = (Math.random() - 0.5) * (roadGridStep - sidewalkWidth - 5);
+            building.position.x = blockX * roadGridStep + randomOffsetX;
+            building.position.z = blockZ * roadGridStep + randomOffsetZ;
+            building.scale.x = Math.random() * 6 + 4;
+            building.scale.z = Math.random() * 6 + 4;
+            building.scale.y = Math.random() * 25 + 10;
+            building.position.y = building.scale.y / 2;
+            building.material.map.repeat.set(building.scale.x / 4, building.scale.y / 4);
+            buildings.add(building);
+        }
+        scene.add(buildings);
+
+        // --- Cars ---
+        const cars = new THREE.Group();
+        function createVehicle() {
+            const vehicleType = Math.random();
+            const vehicle = new THREE.Group();
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: Math.random() * 0xffffff });
+            const topMaterial = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+            const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x111111 });
+            let mainBody;
+
+            if (vehicleType < 0.5) { // Small Car / Cab
+                mainBody = new THREE.Mesh(new THREE.BoxGeometry(4, 1.5, 2), bodyMaterial);
+                vehicle.add(mainBody);
+                const top = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1, 1.8), topMaterial);
+                top.position.y = 1.25;
+                vehicle.add(top);
+                vehicle.position.y = 0.75;
+            } else if (vehicleType < 0.75) { // Pickup Truck
+                mainBody = new THREE.Mesh(new THREE.BoxGeometry(5, 1.6, 2.1), bodyMaterial);
+                vehicle.add(mainBody);
+                const cab = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 1.9), topMaterial);
+                cab.position.set(-1, 1.4, 0);
+                vehicle.add(cab);
+                vehicle.position.y = 0.8;
+            } else if (vehicleType < 0.9) { // Box Truck
+                const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 2.2), bodyMaterial);
+                cab.position.x = 3;
+                vehicle.add(cab);
+                mainBody = new THREE.Mesh(new THREE.BoxGeometry(6, 2.8, 2.2), topMaterial);
+                mainBody.position.x = -1;
+                vehicle.add(mainBody);
+                vehicle.position.y = 1.4;
+            } else { // Tractor Trailer
+                const cab = new THREE.Mesh(new THREE.BoxGeometry(3, 2.5, 2.4), bodyMaterial);
+                cab.position.x = 5;
+                vehicle.add(cab);
+                mainBody = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 2.4), topMaterial);
+                mainBody.position.x = -2;
+                vehicle.add(mainBody);
+                vehicle.position.y = 1.5;
+            }
+            
+            const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 32);
+            const wheel1 = new THREE.Mesh(wheelGeo, wheelMaterial);
+            wheel1.rotation.z = Math.PI / 2;
+            wheel1.position.set(-mainBody.geometry.parameters.width / 2 + 0.5, -mainBody.geometry.parameters.height/2, 1.2);
+            vehicle.add(wheel1);
+            const wheel2 = wheel1.clone();
+            wheel2.position.x = mainBody.geometry.parameters.width / 2 - 0.5;
+            vehicle.add(wheel2);
+            const wheel3 = wheel1.clone();
+            wheel3.position.z = -1.2;
+            vehicle.add(wheel3);
+            const wheel4 = wheel2.clone();
+            wheel4.position.z = -1.2;
+            vehicle.add(wheel4);
+
+            vehicle.userData.body = mainBody;
+            return vehicle;
+        }
+
+        roadPositions.forEach(roadPos => {
+            for (let i = 0; i < 2; i++) {
+                const vehicle1 = createVehicle();
+                const vehicle2 = createVehicle();
+
+                if (roadPos.dir === 'z') {
+                    vehicle1.position.x = roadPos.x - roadWidth / 4;
+                    vehicle1.position.z = (Math.random() - 0.5) * worldSize;
+                    vehicle1.rotation.y = Math.PI / 2;
+                    vehicle2.position.x = roadPos.x + roadWidth / 4;
+                    vehicle2.position.z = (Math.random() - 0.5) * worldSize;
+                    vehicle2.rotation.y = -Math.PI / 2;
+                } else {
+                    vehicle1.position.x = (Math.random() - 0.5) * worldSize;
+                    vehicle1.position.z = roadPos.z - roadWidth / 4;
+                    vehicle2.position.x = (Math.random() - 0.5) * worldSize;
+                    vehicle2.position.z = roadPos.z + roadWidth / 4;
+                    vehicle2.rotation.y = Math.PI;
+                }
+                cars.add(vehicle1);
+                cars.add(vehicle2);
+            }
+        });
+        scene.add(cars);
+
+        // --- People ---
+        const people = new THREE.Group();
+        function createPerson() {
+            const person = new THREE.Group();
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0xFFDBAC });
+            const shirtMaterial = new THREE.MeshPhongMaterial({ color: Math.random() * 0xffffff });
+            const pantsMaterial = new THREE.MeshPhongMaterial({ color: Math.random() * 0xffffff });
+
+            const heightScale = 0.8 + Math.random() * 0.4;
+            const widthScale = 0.8 + Math.random() * 0.4;
+
+            const headSize = 0.2 * heightScale;
+            const torsoHeight = 0.7 * heightScale;
+            const torsoWidth = 0.5 * widthScale;
+            const armHeight = 0.6 * heightScale;
+            const armWidth = 0.15 * widthScale;
+            const legHeight = 0.8 * heightScale;
+            const legWidth = 0.2 * widthScale;
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(headSize, 32, 32), headMaterial);
+            head.position.y = legHeight + torsoHeight + headSize;
+            person.add(head);
+
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, torsoHeight, 0.3 * widthScale), shirtMaterial);
+            torso.position.y = legHeight + torsoHeight / 2;
+            person.add(torso);
+
+            const armGeo = new THREE.BoxGeometry(armWidth, armHeight, armWidth);
+            const leftArm = new THREE.Mesh(armGeo, shirtMaterial);
+            leftArm.position.set(-(torsoWidth / 2 + armWidth / 2), legHeight + torsoHeight / 2, 0);
+            person.add(leftArm);
+            const rightArm = new THREE.Mesh(armGeo, shirtMaterial);
+            rightArm.position.set(torsoWidth / 2 + armWidth / 2, legHeight + torsoHeight / 2, 0);
+            person.add(rightArm);
+            
+            const legGeo = new THREE.BoxGeometry(legWidth, legHeight, legWidth);
+            const leftLeg = new THREE.Mesh(legGeo, pantsMaterial);
+            leftLeg.position.set(-(torsoWidth / 4), legHeight / 2, 0);
+            person.add(leftLeg);
+            const rightLeg = new THREE.Mesh(legGeo, pantsMaterial);
+            rightLeg.position.set(torsoWidth / 4, legHeight / 2, 0);
+            person.add(rightLeg);
+
+            person.userData.torso = torso;
+            return person;
+        }
+        
+        roadPositions.forEach(roadPos => {
+            for (let i = 0; i < 10; i++) { 
+                const person = createPerson();
+                const side = Math.random() > 0.5 ? 1 : -1;
+                const sidewalkOffset = roadWidth / 2 + 1;
+
+                if (roadPos.dir === 'z') {
+                    person.position.x = roadPos.x + side * sidewalkOffset;
+                    person.position.z = (Math.random() - 0.5) * worldSize;
+                } else {
+                    person.position.x = (Math.random() - 0.5) * worldSize;
+                    person.position.z = roadPos.z + side * sidewalkOffset;
+                }
+                person.rotation.y = Math.random() * Math.PI * 2;
+                people.add(person);
+            }
+        });
+        scene.add(people);
+
+        // --- Traffic Lights ---
+        const trafficLights = new THREE.Group();
+        function createTrafficLight() {
+            const light = new THREE.Group();
+            const poleMaterial = new THREE.MeshPhongMaterial({ color: 0x555555 });
+            const boxMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            const redLightMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0x880000 });
+            const yellowLightMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, emissive: 0x888800 });
+            const greenLightMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, emissive: 0x008800 });
+
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 7, 16), poleMaterial);
+            pole.position.y = 3.5;
+            light.add(pole);
+
+            const box = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 0.4), boxMaterial);
+            box.position.y = 6.5;
+            light.add(box);
+
+            const redLight = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), redLightMaterial);
+            redLight.position.set(0, 6.9, 0.21);
+            light.add(redLight);
+
+            const yellowLight = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), yellowLightMaterial);
+            yellowLight.position.set(0, 6.5, 0.21);
+            light.add(yellowLight);
+
+            const greenLight = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), greenLightMaterial);
+            greenLight.position.set(0, 6.1, 0.21);
+            light.add(greenLight);
+            
+            light.userData.body = pole;
+            return light;
+        }
+        
+        const intersectionPoints = [];
+        const zRoads = roadPositions.filter(r => r.dir === 'z');
+        const xRoads = roadPositions.filter(r => r.dir === 'x');
+        zRoads.forEach(zRoad => {
+            xRoads.forEach(xRoad => {
+                intersectionPoints.push({ x: zRoad.x, z: xRoad.z });
+            });
+        });
+
+        intersectionPoints.forEach(point => {
+            const offset = sidewalkWidth / 2 + 0.5;
+            const positions = [
+                { x: point.x - offset, z: point.z - offset, rot: Math.PI / 4 },
+                { x: point.x + offset, z: point.z - offset, rot: -Math.PI / 4 },
+                { x: point.x - offset, z: point.z + offset, rot: 3 * Math.PI / 4 },
+                { x: point.x + offset, z: point.z + offset, rot: -3 * Math.PI / 4 },
+            ];
+            positions.forEach(pos => {
+                const light = createTrafficLight();
+                light.position.x = pos.x;
+                light.position.z = pos.z;
+                light.rotation.y = pos.rot;
+                trafficLights.add(light);
+            });
+        });
+        scene.add(trafficLights);
+
+        // --- Billboards ---
+        const billboards = new THREE.Group();
+        const adSlogans = ["Drink Pepsi", "Sonic Speed!", "Math is Fun!", "Go Fast!", "3D Games Rock"];
+        function createBillboard(slogan) {
+            const billboard = new THREE.Group();
+            const poleMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            
+            const pole1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 10, 16), poleMaterial);
+            pole1.position.x = -4;
+            billboard.add(pole1);
+            const pole2 = pole1.clone();
+            pole2.position.x = 4;
+            billboard.add(pole2);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#FFFFFF';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.font = "bold 48px Arial";
+            context.fillStyle = '#FF0000';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(slogan, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const signMaterial = new THREE.MeshBasicMaterial({ map: texture });
+            const sign = new THREE.Mesh(new THREE.PlaneGeometry(10, 2.5), signMaterial);
+            sign.position.y = 6;
+            billboard.add(sign);
+            
+            billboard.userData.body = pole1; // Use one pole for collision
+            return billboard;
+        }
+
+        for (let i = 0; i < 10; i++) {
+            const slogan = adSlogans[Math.floor(Math.random() * adSlogans.length)];
+            const billboard = createBillboard(slogan);
+            const building = buildings.children[Math.floor(Math.random() * buildings.children.length)];
+            
+            billboard.position.x = building.position.x;
+            billboard.position.z = building.position.z;
+            billboard.position.y = building.position.y + building.scale.y / 2;
+            billboard.rotation.y = Math.random() * Math.PI * 2;
+            billboards.add(billboard);
+        }
+        scene.add(billboards);
+
+
+        // --- Rings ---
+        const rings = new THREE.Group();
+        const ringGeometry = new THREE.TorusGeometry(0.5, 0.1, 16, 100);
+        const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xFFD700, emissive: 0xDAA520 });
+        for (let i = 0; i < 20; i++) {
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.x = (Math.random() - 0.5) * 180;
+            ring.position.z = (Math.random() - 0.5) * 180;
+            ring.position.y = 1;
+            rings.add(ring);
+        }
+        scene.add(rings);
+
+        // --- Game State ---
+        let ringCount = 0;
+        let keys = {};
+        let currentRing = null;
+        let correctAnswer = 0;
+
+        // --- UI Elements ---
+        const ringCountElement = document.getElementById('ring-count');
+        const modal = document.getElementById('modal');
+        const modalQuestion = document.getElementById('modal-question');
+        const modalInput = document.getElementById('modal-input');
+        const modalButton = document.getElementById('modal-button');
+        const messageBox = document.getElementById('message-box');
+
+        // --- Player Controls & Collision ---
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        function moveSonic() {
+            const speed = 0.2;
+            const rotationSpeed = 0.05;
+            
+            let dx = 0, dz = 0;
+            if (keys['KeyW'] || keys['ArrowUp']) {
+                dx += Math.sin(sonic.rotation.y) * speed;
+                dz += Math.cos(sonic.rotation.y) * speed;
+            }
+            if (keys['KeyS'] || keys['ArrowDown']) {
+                dx -= Math.sin(sonic.rotation.y) * speed;
+                dz -= Math.cos(sonic.rotation.y) * speed;
+            }
+            if (keys['KeyA'] || keys['ArrowLeft']) { sonic.rotation.y += rotationSpeed; }
+            if (keys['KeyD'] || keys['ArrowRight']) { sonic.rotation.y -= rotationSpeed; }
+
+            if (dx === 0 && dz === 0) return;
+
+            const obstacles = [...buildings.children, ...cars.children, ...people.children, ...billboards.children, ...trafficLights.children];
+            
+            // --- REBUILT COLLISION LOGIC ---
+            const playerBox = new THREE.Box3().setFromObject(body);
+            const velocity = new THREE.Vector3(dx, 0, dz);
+
+            // Update player's world matrix to get correct position for collision
+            sonic.updateMatrixWorld();
+            playerBox.setFromObject(body);
+
+            for (const obstacle of obstacles) {
+                const obstacleBody = obstacle.userData.body || obstacle.userData.torso || obstacle;
+                obstacle.updateMatrixWorld();
+                const obstacleBox = new THREE.Box3().setFromObject(obstacleBody);
+
+                if (playerBox.intersectsBox(obstacleBox)) {
+                    const penetration = new THREE.Vector3();
+                    const centerPlayer = new THREE.Vector3();
+                    const centerObstacle = new THREE.Vector3();
+                    playerBox.getCenter(centerPlayer);
+                    obstacleBox.getCenter(centerObstacle);
+
+                    const overlapX = (playerBox.max.x - playerBox.min.x) / 2 + (obstacleBox.max.x - obstacleBox.min.x) / 2 - Math.abs(centerPlayer.x - centerObstacle.x);
+                    const overlapZ = (playerBox.max.z - playerBox.min.z) / 2 + (obstacleBox.max.z - obstacleBox.min.z) / 2 - Math.abs(centerPlayer.z - centerObstacle.z);
+
+                    if (overlapX < overlapZ) {
+                        penetration.x = (centerPlayer.x > centerObstacle.x) ? overlapX : -overlapX;
+                        velocity.x = 0; // Stop movement into the object
+                    } else {
+                        penetration.z = (centerPlayer.z > centerObstacle.z) ? overlapZ : -overlapZ;
+                        velocity.z = 0; // Stop movement into the object
+                    }
+                    sonic.position.add(penetration);
+                }
+            }
+
+            sonic.position.x += velocity.x;
+            sonic.position.z += velocity.z;
+        }
+
+        // --- Camera Follow ---
+        function updateCamera() {
+            const distance = 10;
+            const height = 5;
+            const cameraX = sonic.position.x - distance * Math.sin(sonic.rotation.y);
+            const cameraZ = sonic.position.z - distance * Math.cos(sonic.rotation.y);
+            camera.position.set(cameraX, sonic.position.y + height, cameraZ);
+            camera.lookAt(sonic.position);
+        }
+
+        // --- Ring Collision Detection & Math Problem ---
+        function checkCollisions() {
+            if (modal.style.display === 'block') return;
+            const sonicBox = new THREE.Box3().setFromObject(body);
+            for (let i = rings.children.length - 1; i >= 0; i--) {
+                const ring = rings.children[i];
+                const ringBox = new THREE.Box3().setFromObject(ring);
+                if (sonicBox.intersectsBox(ringBox)) {
+                    currentRing = ring;
+                    showMathProblem();
+                    break;
+                }
+            }
+        }
+
+        function showMathProblem() {
+            const num1 = Math.floor(Math.random() * 10) + 1;
+            const num2 = Math.floor(Math.random() * 10) + 1;
+            correctAnswer = num1 * num2;
+            modalQuestion.textContent = `${num1} x ${num2} = ?`;
+            modalInput.value = '';
+            modal.style.display = 'block';
+            modalInput.focus();
+        }
+
+        function showMessage(text, isSuccess) {
+            messageBox.textContent = text;
+            messageBox.style.backgroundColor = isSuccess ? 'rgba(0, 128, 0, 0.7)' : 'rgba(255, 0, 0, 0.7)';
+            messageBox.style.display = 'block';
+            setTimeout(() => { messageBox.style.display = 'none'; }, 2000);
+        }
+
+        modalButton.addEventListener('click', () => {
+            const userAnswer = parseInt(modalInput.value);
+            if (userAnswer === correctAnswer) {
+                ringCount++;
+                ringCountElement.textContent = ringCount;
+                if (soundInitialized) synth.triggerAttackRelease("G5", "16n");
+                rings.remove(currentRing);
+                showMessage('Correct! Ring collected!', true);
+                if (rings.children.length === 0) {
+                     showMessage('You collected all the rings! You win!', true);
+                }
+            } else {
+                if (soundInitialized) synth.triggerAttackRelease("C3", "8n");
+                showMessage('Wrong answer! Try again.', false);
+            }
+            modal.style.display = 'none';
+            currentRing = null;
+        });
+        
+        modalInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') { modalButton.click(); } });
+
+        // --- Fullscreen Logic ---
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (soundInitialized && Math.random() < 0.001) { // Low probability for occasional honk
+                hornSynth.triggerAttackRelease("A3", "8n");
+            }
+
+            rings.children.forEach(ring => { ring.rotation.y += 0.02; });
+            moveSonic();
+            updateCamera();
+            checkCollisions();
+            renderer.render(scene, camera);
+        }
+
+        // --- Handle Window Resize ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
+
+
