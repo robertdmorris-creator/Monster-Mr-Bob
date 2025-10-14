@@ -220,6 +220,101 @@
         }
         scene.add(cityLayout);
 
+        // --- Street Decorations ---
+        const streetDecorations = new THREE.Group();
+        const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x606060 });
+        const lightMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFF88 });
+
+        function createLightPole() {
+            const lightPole = new THREE.Group();
+            const poleGeo = new THREE.CylinderGeometry(0.1, 0.15, 6, 8);
+            const pole = new THREE.Mesh(poleGeo, poleMaterial);
+            pole.position.y = 3;
+            lightPole.add(pole);
+
+            const lightGeo = new THREE.SphereGeometry(0.3, 16, 16);
+            const lightMesh = new THREE.Mesh(lightGeo, lightMaterial);
+            lightMesh.position.y = 6;
+            lightPole.add(lightMesh);
+            
+            const pointLight = new THREE.PointLight(0xFFFF88, 0.7, 15);
+            pointLight.position.y = 5.8;
+            lightPole.add(pointLight);
+
+            return lightPole;
+        }
+
+        const streetNames = ["Angel Ave", "Bob Blvd", "Tag Terrace", "Run Rd", "Hide St"];
+
+        function createStreetSign() {
+            const signPost = new THREE.Group();
+            const poleGeo = new THREE.CylinderGeometry(0.08, 0.08, 3.5, 8);
+            const pole = new THREE.Mesh(poleGeo, poleMaterial);
+            pole.position.y = 1.75;
+            signPost.add(pole);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#00AA00';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.font = 'bold 30px sans-serif';
+            context.fillStyle = 'white';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(streetNames[Math.floor(Math.random() * streetNames.length)], canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const signGeo = new THREE.BoxGeometry(2, 0.5, 0.1);
+            const signMesh = new THREE.Mesh(signGeo, new THREE.MeshLambertMaterial({ map: texture }));
+            signMesh.position.y = 3.2;
+            signPost.add(signMesh);
+            return signPost;
+        }
+
+        roadPositions.forEach(road => {
+            for(let i = -worldSize/2; i < worldSize/2; i += 30) { // every 30 units
+                const posOffset = sidewalkWidth/2 - 1.5;
+                if(road.dir === 'z') { // Vertical road
+                    if (Math.abs(road.x) < worldSize/2) {
+                        const pole1 = createLightPole();
+                        pole1.position.set(road.x + posOffset, 0, i);
+                        streetDecorations.add(pole1);
+                        
+                        const pole2 = createLightPole();
+                        pole2.position.set(road.x - posOffset, 0, i);
+                        streetDecorations.add(pole2);
+                    }
+                } else { // Horizontal road
+                     if (Math.abs(road.z) < worldSize/2) {
+                        const pole1 = createLightPole();
+                        pole1.position.set(i, 0, road.z + posOffset);
+                        streetDecorations.add(pole1);
+
+                        const pole2 = createLightPole();
+                        pole2.position.set(i, 0, road.z - posOffset);
+                        streetDecorations.add(pole2);
+                     }
+                }
+            }
+        });
+
+        // Add some street signs at intersections
+        for (let i = -worldSize / 2 + roadGridStep / 2; i < worldSize / 2; i += roadGridStep) {
+            for (let j = -worldSize / 2 + roadGridStep / 2; j < worldSize / 2; j += roadGridStep) {
+                if(Math.random() > 0.4) { // Not at every intersection
+                    const sign = createStreetSign();
+                    const xOffset = (sidewalkWidth/2 - 1) * (Math.random() > 0.5 ? 1 : -1);
+                    const zOffset = (sidewalkWidth/2 - 1) * (Math.random() > 0.5 ? 1 : -1);
+                    sign.position.set(i + xOffset, 0, j + zOffset);
+                    sign.rotation.y = Math.random() * Math.PI * 2;
+                    streetDecorations.add(sign);
+                }
+            }
+        }
+        scene.add(streetDecorations);
+
         // --- Mr. Bob the Angel (Player) ---
         const mrBob = new THREE.Group();
         const angelBodyMaterial = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
@@ -373,7 +468,7 @@
         
         // --- Students ---
         const students = new THREE.Group();
-        const studentNames = ["Avery", "Sunnie", "Kylie", "Chloe", "Rylee", "Liam", "Kamden", "Steven", "Candice", "Arya", "Raelyn", "Dylan"];
+        const studentNames = ["Jensen", "Nolan", "Joseph", "Bella", "James", "Jo'Lisa", "Maddie", "Marcus", "Lillain", "Georgia", "Avett", "Jensen"];
         
         function createStudent(name) {
             const student = new THREE.Group();
@@ -420,7 +515,7 @@
         let keys = {}, gameOver = false;
         const studentCountElement = document.getElementById('student-count');
         studentCountElement.textContent = students.children.length;
-        const obstacles = [...buildings.children, ...cars.children];
+        const obstacles = [...buildings.children, ...cars.children, ...streetDecorations.children];
         const playerCollider = new THREE.Sphere(new THREE.Vector3(), 1.2);
         const playerVelocity = new THREE.Vector3();
 
@@ -429,7 +524,7 @@
 
         function moveMrBob() {
             if (gameOver) return;
-            const speed = 0.18, rotationSpeed = 0.04;
+            const speed = 0.35, rotationSpeed = 0.04;
 
             if (keys['KeyA'] || keys['ArrowLeft']) mrBob.rotation.y += rotationSpeed;
             if (keys['KeyD'] || keys['ArrowRight']) mrBob.rotation.y -= rotationSpeed;
@@ -547,3 +642,4 @@
     </script>
 </body>
 </html>
+
